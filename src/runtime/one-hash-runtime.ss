@@ -36,7 +36,11 @@
   (protocol
     (lambda (new)
       (lambda (i*)
-        (new i* (length i*) 0 '())))))
+        (new
+          (if (pair? i*) (list->vector i*) i*)
+          (length i*)
+          0
+          '())))))
 
 ;;----------------------------------------
 ;; Representation for the tokens in the 1# language
@@ -44,7 +48,6 @@
 (define one 1)
 (define hash '\x23;
   )
-
 
 ;;----------------------------------------
 ;; Retrieves a register from a register set as used by the trm
@@ -54,38 +57,42 @@
 ;;
 ;; The current implementation is zero-based.
 ;;----------------------------------------
-(define (get-register reg* rnum)
+(define (get-register prog rnum)
   (begin
-      (when (< (length reg*) rnum)
-        (let* ([diff (- rnum (length reg*))]
+      (when (< (length (trm-reg* prog)) rnum)
+        (let* ([diff (- rnum (length (trm-reg* prog)))]
                [ext (make-list diff '())])
-          (set! reg* (append reg* ext))))
-      (list-ref reg* (sub1 rnum))))
+          (trm-reg*-set! prog (append (trm-reg* prog) ext))))
+      (list-ref (trm-reg* prog) (sub1 rnum))))
+
+(define (register-set! prog rnum val)
+  (set-car! (list-tail (trm-reg* prog) (sub1 rnum)) val))
 
 ;;----------------------------------------
 ;; Generalized function for enqueuing an object onto a register.
 ;;
 ;; The current implementation is zero-based.
 ;;----------------------------------------
-(define (register-enqueue reg* rnum val)
+(define (register-enqueue prog rnum val)
   (let ([reg (get-register reg* rnum)])
-    (set! reg `(,@reg ,val))))
+    (let ([reg^ `(,@reg ,val)])
+      (register-set! prog rnum reg^))))
 
 ;;----------------------------------------
 ;; Enqueue a one onto a register.
 ;;
 ;; The current implementation is zero-based.
 ;;----------------------------------------
-(define (register-enqueue-one reg* rnum)
-  (register-enqueue reg* rnum one))
+(define (register-enqueue-one prog rnum)
+  (register-enqueue prog rnum one))
 
 ;;----------------------------------------
 ;; Enqueue a hash onto a register.
 ;;
 ;; The current implementation is zero-based.
 ;;----------------------------------------
-(define (register-enqueue-hash reg* rnum)
-  (register-enqueue reg* rnum hash))
+(define (register-enqueue-hash prog rnum)
+  (register-enqueue prog rnum hash))
 
 ;;----------------------------------------
 ;; Retrieve the value from the front of a register. If the register is
@@ -93,12 +100,14 @@
 ;;
 ;; The current implementation is zero-based.
 ;;----------------------------------------
-(define (register-dequeue reg* rnum)
-  (let ([reg (get-register reg* rnum)])
+(define (register-dequeue prog rnum)
+  (let ([reg (get-register prog rnum)])
     (if (not (null? reg))
-        (let ([val (car reg)])
+        (let ([val (car reg)]
+              [reg^ (cdr reg)])
           (begin
             (set! reg (cdr reg))
+            (register-set! prog rnum reg^)
             val))
         '())))
 
@@ -108,7 +117,7 @@
 ;;
 ;; The current implementation is zero-based.
 ;;----------------------------------------
-(define (get-instr-num instr* inum) (list-ref instr* inum))
+(define (get-instr-num instr* inum) (vector-ref instr* inum))
 
 ;;----------------------------------------
 ;; Accessors for the instruction representation for the count and
@@ -123,20 +132,26 @@
 ;;
 ;; Used for the transfer-forward and transfer-backward instructions.
 ;;----------------------------------------
-(define (pc-move-fwd pc amnt) (set! pc (+ pc amnt)))
-(define (pc-move-bwd pc amnt) (set! pc (- pc amnt)))
-(define (pc-inc pc) (pc-move-fwd pc 1))
+(define (pc-move-fwd prog amnt)
+  (let ([pc (trm-pc prog)])
+    (trm-pc-set! prog (+ pc amnt))))
+
+(define (pc-move-bwd prog amnt)
+    (let ([pc (trm-pc prog)])
+      (trm-pc-set! prog (- pc amnt))))
+
+(define (pc-inc prog) (pc-move-fwd prog 1))
 
 ;;----------------------------------------
 ;; Implementation of the case instruction.
 ;;----------------------------------------
-(define (case-on-reg pc reg* rnum)
-  (let ([reg (get-register reg* rnum)])
-    (let ([val (register-dequeue reg* rnum)])
+(define (case-on-reg prog rnum)
+  (let ([reg (get-register prog rnum)])
+    (let ([val (register-dequeue prog rnum)])
       (cond
-        [(null? val) (pc-inc pc)]
-        [(eq? val one) (pc-move-fwd pc 2)]
-        [(eq? val hash) (pc-move-fwd pc 3)]
+        [(null? val) (pc-inc prog)]
+        [(eq? val one) (pc-move-fwd prog 2)]
+        [(eq? val hash) (pc-move-fwd prog 3)]
         [else (error 'case-on-reg
                 "Invalid value in register: ~s"
                 val)]))))
@@ -147,8 +162,8 @@
 ;; Used as a convenience function for cleaning up registers on return
 ;; from exec.
 ;;----------------------------------------
-(define (prune-empty-regs reg*)
-  (let loop ([reg* reg*] [tail '()])
+(define (prune-empty-regs prog)
+  (let loop ([reg* (trm-reg* prog)] [tail '()])
     (cond
       [(null? reg*) '()]
       [(null? (car reg*)) (loop (cdr reg*) (cons '() tail))]
@@ -157,8 +172,8 @@
 ;;----------------------------------------
 ;; Pretty-print the registers
 ;;----------------------------------------
-(define (pretty-print-regs reg*)
-  (let loop ([reg* reg*] [rnum 1])
+(define (pretty-print-regs prog)
+  (let loop ([reg* (trm-reg* prog)] [rnum 1])
     (unless (null? reg*)
       (begin
         (printf "R~s: ~s~n" rnum (car reg*))
@@ -167,42 +182,49 @@
 ;;----------------------------------------
 ;; Format the output from the interpreter
 ;;----------------------------------------
-(define (format-output reg*)
-  (let ([pruned (prune-empty-regs reg*)])
+(define (format-output prog)
+  (let ([pruned (prune-empty-regs prog)])
     (begin
       (printf "Register values:~n")
       (printf "-------------------------~n")
-      (pretty-print-regs reg*))))
+      (pretty-print-regs prog))))
+
+(define (trm-proper-halt? prog)
+  (= (trm-pc prog) (trm-plen prog)))
+
+(define (trm-improper-halt? prog)
+  (or (< (trm-pc prog) 0) (> (trm-pc prog) (trm-plen prog))))
 
 ;;----------------------------------------
-;; Executes the program represented by a trm record.
+;; Executes the program represented by a trm record based on an input
+;; list of instructions.
 ;;
 ;; Returns the value of the registers on halting of the program.
 ;;----------------------------------------
 (define (exec instr*)
   (let loop ([prog (make-trm instr*)])
     (cond
-      [(= (trm-pc prog) (trm-plen prog)) (format-output (trm-reg* prog))]
-      [(or (< (trm-pc prog) 0) (> (trm-pc prog) (trm-plen prog)))
+      [(trm-proper-halt? prog) (format-output (trm-reg* prog))]
+      [(trm-improper-halt? prog)
        (errorf 'exec
          "Program halted improperly:\npc: ~s\nregisters: ~s"
          (trm-pc prog)
          (trm-reg* prog))]
       [else
-        (let ([instr (get-instr-num (trm-instr* prog) (trm-pc prog))])
+        (let ([instr (get-instr-num prog)])
           (let ([cnt (instr-get-cnt instr)]
                 [type (instr-get-type instr)])
             (begin
               (case type
                 [(1) (begin
-                       (register-enqueue-one (trm-reg* prog) cnt)
-                       (pc-inc (trm-pc prog)))]
+                       (register-enqueue-one trm cnt)
+                       (pc-inc trm))]
                 [(2) (begin
-                       (register-enqueue-hash (trm-reg* prog) cnt)
-                       (pc-inc (trm-pc prog)))]
-                [(3) (pc-move-fwd (trm-pc prog) cnt)]
-                [(4) (pc-move-bwd (trm-pc prog) cnt)]
-                [(5) (case-on-reg (trm-pc prog) (trm-reg* prog) cnt)])
+                       (register-enqueue-hash trm cnt)
+                       (pc-inc trm))]
+                [(3) (pc-move-fwd trm cnt)]
+                [(4) (pc-move-bwd trm cnt)]
+                [(5) (case-on-reg trm cnt)])
               (loop prog))))])))
   
 )
