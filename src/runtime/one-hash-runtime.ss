@@ -204,7 +204,8 @@
   (or (< (trm-pc prog) 0) (> (trm-pc prog) (trm-plen prog))))
 
 (define (trm-current-instr prog)
-  (get-instr-num prog (trm-pc prog)))
+  (let ([instr (get-instr-num prog (trm-pc prog))])
+    (values (instr-get-cnt instr) (instr-get-type instr))))
 
 ;;----------------------------------------
 ;; Executes the program represented by a trm record based on an input
@@ -222,20 +223,18 @@
          (trm-pc prog)
          (trm-reg* prog))]
       [else
-        (let ([instr (trm-current-instr prog)])
-          (let ([cnt (instr-get-cnt instr)]
-                [type (instr-get-type instr)])
-            (begin
-              (case type
-                [(1) (begin
-                       (register-enqueue-one prog cnt)
-                       (pc-inc prog))]
-                [(2) (begin
-                       (register-enqueue-hash prog cnt)
-                       (pc-inc prog))]
-                [(3) (pc-move-fwd prog cnt)]
-                [(4) (pc-move-bwd prog cnt)]
-                [(5) (case-on-reg prog cnt)])
-              (loop prog))))])))
+        (let-values ([(cnt type) (trm-current-instr prog)])
+          (begin
+            (case type
+              [(1) (begin
+                     (register-enqueue-one prog cnt)
+                     (pc-inc prog))]
+              [(2) (begin
+                     (register-enqueue-hash prog cnt)
+                     (pc-inc prog))]
+              [(3) (pc-move-fwd prog cnt)]
+              [(4) (pc-move-bwd prog cnt)]
+              [(5) (case-on-reg prog cnt)])
+            (loop prog)))])))
   
 )
