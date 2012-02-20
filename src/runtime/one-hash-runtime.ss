@@ -74,7 +74,7 @@
 ;; The current implementation is zero-based.
 ;;----------------------------------------
 (define (register-enqueue prog rnum val)
-  (let ([reg (get-register reg* rnum)])
+  (let ([reg (get-register prog rnum)])
     (let ([reg^ `(,@reg ,val)])
       (register-set! prog rnum reg^))))
 
@@ -117,7 +117,7 @@
 ;;
 ;; The current implementation is zero-based.
 ;;----------------------------------------
-(define (get-instr-num instr* inum) (vector-ref instr* inum))
+(define (get-instr-num prog inum) (vector-ref (trm-instr* prog) inum))
 
 ;;----------------------------------------
 ;; Accessors for the instruction representation for the count and
@@ -176,7 +176,15 @@
   (let loop ([reg* (trm-reg* prog)] [rnum 1])
     (unless (null? reg*)
       (begin
-        (printf "R~s: ~s~n" rnum (car reg*))
+        (printf "R~s: " rnum)
+        (for-each
+          (lambda (x)
+            (if (eq? x '\x23;
+                  )
+                (printf "\x23;")
+                (printf "~s" x)))
+          (car reg*))
+        (printf "~n")
         (loop (cdr reg*) (add1 rnum))))))
 
 ;;----------------------------------------
@@ -195,6 +203,9 @@
 (define (trm-improper-halt? prog)
   (or (< (trm-pc prog) 0) (> (trm-pc prog) (trm-plen prog))))
 
+(define (trm-current-instr prog)
+  (get-instr-num prog (trm-pc prog)))
+
 ;;----------------------------------------
 ;; Executes the program represented by a trm record based on an input
 ;; list of instructions.
@@ -204,27 +215,27 @@
 (define (exec instr*)
   (let loop ([prog (make-trm instr*)])
     (cond
-      [(trm-proper-halt? prog) (format-output (trm-reg* prog))]
+      [(trm-proper-halt? prog) (format-output prog)]
       [(trm-improper-halt? prog)
        (errorf 'exec
-         "Program halted improperly:\npc: ~s\nregisters: ~s"
+         "Program halted improperly:~npc: ~s~nregisters: ~s"
          (trm-pc prog)
          (trm-reg* prog))]
       [else
-        (let ([instr (get-instr-num prog)])
+        (let ([instr (trm-current-instr prog)])
           (let ([cnt (instr-get-cnt instr)]
                 [type (instr-get-type instr)])
             (begin
               (case type
                 [(1) (begin
-                       (register-enqueue-one trm cnt)
-                       (pc-inc trm))]
+                       (register-enqueue-one prog cnt)
+                       (pc-inc prog))]
                 [(2) (begin
-                       (register-enqueue-hash trm cnt)
-                       (pc-inc trm))]
-                [(3) (pc-move-fwd trm cnt)]
-                [(4) (pc-move-bwd trm cnt)]
-                [(5) (case-on-reg trm cnt)])
+                       (register-enqueue-hash prog cnt)
+                       (pc-inc prog))]
+                [(3) (pc-move-fwd prog cnt)]
+                [(4) (pc-move-bwd prog cnt)]
+                [(5) (case-on-reg prog cnt)])
               (loop prog))))])))
   
 )
