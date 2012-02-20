@@ -11,7 +11,21 @@
 (library (compiler linker)
   (export link)
    (import
-     (rnrs) (chezscheme) (util match))
+     (rnrs) (chezscheme))
+
+(define-record-type Linker-code
+  (fields
+    (mutable Expr+)))
+
+(define-record-type Linker-expr
+  (fields
+    (immutable opnd)))
+
+(define-record-type Snoc-one (parent Linker-expr))
+(define-record-type Snoc-hash (parent Linker-expr))
+(define-record-type Jump (parent Linker-expr))
+(define-record-type Case-on (parent Linker-expr))
+(define-record-type Label (parent Linker-expr))
 
 ;;--------------------------------------------------
 ;; Procedure:
@@ -23,20 +37,20 @@
 ;;      with absolute jumps.
 ;;
 ;; Input grammar:
-;;      Program ::= (code Expr+)
-;;      Expr+   ::= (snoc-one [register])
-;;                  (snoc-hash [register])
-;;                  (jump [label])
-;;                  (case-on [register])
+;;      Program ::= (Code Expr+)
+;;      Expr+   ::= (Snoc-one [register])
+;;                  (Snoc-hash [register])
+;;                  (Jump [label])
+;;                  (Case-on [register])
 ;;                  [label]
 ;;
 ;; Output grammar:
-;;      Program ::= (code Expr+)
-;;      Expr+   ::= (snoc-one [register])
-;;                  (snoc-hash [register])
-;;                  (jump-fwd [int])
-;;                  (jump-bwd [int])
-;;                  (case-on [register])
+;;      Program ::= (Code Expr+)
+;;      Expr+   ::= (Snoc-one [register])
+;;                  (Snoc-hash [register])
+;;                  (Jump-fwd [int])
+;;                  (Jump-bwd [int])
+;;                  (Case-on [register])
 ;;--------------------------------------------------
 (define (link code))
   
