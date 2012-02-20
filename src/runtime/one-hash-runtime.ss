@@ -56,11 +56,11 @@
 ;;----------------------------------------
 (define (get-register reg* rnum)
   (begin
-    (when (< (length reg*) rnum)
-      (let* ([diff (- rnum (length reg*))]
-             [ext (make-list diff '())])
-        (set! reg* (append reg* ext))))
-    (list-ref reg* rnum)))
+      (when (< (length reg*) rnum)
+        (let* ([diff (- rnum (length reg*))]
+               [ext (make-list diff '())])
+          (set! reg* (append reg* ext))))
+      (list-ref reg* (sub1 rnum))))
 
 ;;----------------------------------------
 ;; Generalized function for enqueuing an object onto a register.
@@ -77,7 +77,7 @@
 ;; The current implementation is zero-based.
 ;;----------------------------------------
 (define (register-enqueue-one reg* rnum)
-  (register-enqueue rnum reg* one))
+  (register-enqueue reg* rnum one))
 
 ;;----------------------------------------
 ;; Enqueue a hash onto a register.
@@ -85,7 +85,7 @@
 ;; The current implementation is zero-based.
 ;;----------------------------------------
 (define (register-enqueue-hash reg* rnum)
-  (register-enqueue rnum reg* hash))
+  (register-enqueue reg* rnum hash))
 
 ;;----------------------------------------
 ;; Retrieve the value from the front of a register. If the register is
@@ -194,8 +194,12 @@
                 [type (instr-get-type instr)])
             (begin
               (case type
-                [(1) (register-enqueue-one (trm-reg* prog) cnt)]
-                [(2) (register-enqueue-hash (trm-reg* prog) cnt)]
+                [(1) (begin
+                       (register-enqueue-one (trm-reg* prog) cnt)
+                       (pc-inc (trm-pc prog)))]
+                [(2) (begin
+                       (register-enqueue-hash (trm-reg* prog) cnt)
+                       (pc-inc (trm-pc prog)))]
                 [(3) (pc-move-fwd (trm-pc prog) cnt)]
                 [(4) (pc-move-bwd (trm-pc prog) cnt)]
                 [(5) (case-on-reg (trm-pc prog) (trm-reg* prog) cnt)])
