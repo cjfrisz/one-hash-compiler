@@ -21,10 +21,10 @@
 ;; Description:
 ;;    Maintains the state for a 1# program
 ;; Fields:
-;;      instr*: The instruction list for the program
-;;      plen: The number of instructions in the program
-;;      pc: The program counter (current instruction) of the program
-;;      reg*: The register set used by the program.
+;;      instr*: The instruction list for the program (immutable)
+;;      plen: The number of instructions in the program (immutable)
+;;      pc: The program counter (current instruction) of the program (mutable)
+;;      reg*: The register set used by the program. (mutable)
 ;;----------------------------------------
 (define-record-type
   trm
@@ -42,12 +42,14 @@
           0
           '())))))
 
+
 ;;----------------------------------------
-;; Representation for the tokens in the 1# language
+;; Representation for the symbols in the 1# language
 ;;----------------------------------------
 (define one 1)
 (define hash '\x23;
   )
+
 
 ;;----------------------------------------
 ;; Retrieves a register from a register set as used by the trm
@@ -65,8 +67,15 @@
           (trm-reg*-set! prog (append (trm-reg* prog) ext))))
       (list-ref (trm-reg* prog) (sub1 rnum))))
 
+
+;;----------------------------------------
+;; Procedure for setting the value of a register.
+;;
+;; Uses side-effects.
+;;----------------------------------------
 (define (register-set! prog rnum val)
   (set-car! (list-tail (trm-reg* prog) (sub1 rnum)) val))
+
 
 ;;----------------------------------------
 ;; Generalized function for enqueuing an object onto a register.
@@ -78,6 +87,7 @@
     (let ([reg^ `(,@reg ,val)])
       (register-set! prog rnum reg^))))
 
+
 ;;----------------------------------------
 ;; Enqueue a one onto a register.
 ;;
@@ -86,6 +96,7 @@
 (define (register-enqueue-one prog rnum)
   (register-enqueue prog rnum one))
 
+
 ;;----------------------------------------
 ;; Enqueue a hash onto a register.
 ;;
@@ -93,6 +104,7 @@
 ;;----------------------------------------
 (define (register-enqueue-hash prog rnum)
   (register-enqueue prog rnum hash))
+
 
 ;;----------------------------------------
 ;; Retrieve the value from the front of a register. If the register is
@@ -119,12 +131,14 @@
 ;;----------------------------------------
 (define (get-instr-num prog inum) (vector-ref (trm-instr* prog) inum))
 
+
 ;;----------------------------------------
 ;; Accessors for the instruction representation for the count and
 ;; instruction type, respectively.
 ;;----------------------------------------
 (define (instr-get-cnt instr) (car instr))
 (define (instr-get-type instr) (cdr instr))
+
 
 ;;----------------------------------------
 ;; Procedures for moving the program counter of the program
@@ -142,6 +156,7 @@
 
 (define (pc-inc prog) (pc-move-fwd prog 1))
 
+
 ;;----------------------------------------
 ;; Implementation of the case instruction.
 ;;----------------------------------------
@@ -156,6 +171,7 @@
                 "Invalid value in register: ~s"
                 val)]))))
 
+
 ;;----------------------------------------
 ;; Prune empty registers from the end of the register set.
 ;;
@@ -168,6 +184,7 @@
       [(null? reg*) '()]
       [(null? (car reg*)) (loop (cdr reg*) (cons '() tail))]
       [else (append tail (list (car reg*)) (loop (cdr reg*) '()))])))
+
 
 ;;----------------------------------------
 ;; Pretty-print the registers
@@ -187,6 +204,7 @@
         (printf "~n")
         (loop (cdr reg*) (add1 rnum))))))
 
+
 ;;----------------------------------------
 ;; Format the output from the interpreter
 ;;----------------------------------------
@@ -197,15 +215,25 @@
       (printf "-------------------------~n")
       (pretty-print-regs prog))))
 
+
+;;----------------------------------------
+;; Predicates for proper and improper halting
+;;----------------------------------------
 (define (trm-proper-halt? prog)
   (= (trm-pc prog) (trm-plen prog)))
 
 (define (trm-improper-halt? prog)
   (or (< (trm-pc prog) 0) (> (trm-pc prog) (trm-plen prog))))
 
+
+;;----------------------------------------
+;; Convenience function to return cnt and type of a trm record's
+;; current instruction.
+;;----------------------------------------
 (define (trm-current-instr prog)
   (let ([instr (get-instr-num prog (trm-pc prog))])
     (values (instr-get-cnt instr) (instr-get-type instr))))
+
 
 ;;----------------------------------------
 ;; Executes the program represented by a trm record based on an input
