@@ -1,17 +1,17 @@
 ;;----------------------------------------------------------------------
-;; File one-hash-runtime.ss
+;; File oh-eval.ss
 ;; Written by Chris Frisz
 ;; 
 ;; Created 13 Jan 2012
 ;; Last modified 20 Feb 2012
 ;; 
-;; The file one-hash-runtime.ss defines the one-hash-runtime library
+;; The file oh-eval.ss defines the oh-eval library
 ;; containing an interpreter for the 1# language.
 ;;----------------------------------------------------------------------
 
-(library (runtime one-hash-runtime)
+(library (runtime oh-eval)
 
-  (export exec)
+  (export eval)
 
   (import (chezscheme))
 
@@ -176,7 +176,7 @@
 ;; Prune empty registers from the end of the register set.
 ;;
 ;; Used as a convenience function for cleaning up registers on return
-;; from exec.
+;; from eval.
 ;;----------------------------------------
 (define (prune-empty-regs prog)
   (let loop ([reg* (trm-reg* prog)] [tail '()])
@@ -241,12 +241,12 @@
 ;;
 ;; Returns the value of the registers on halting of the program.
 ;;----------------------------------------
-(define (exec instr*)
+(define (eval instr*)
   (let loop ([prog (make-trm instr*)])
     (cond
       [(trm-proper-halt? prog) (format-output prog)]
       [(trm-improper-halt? prog)
-       (errorf 'exec
+       (errorf 'eval
          "Program halted improperly:~npc: ~s~nregisters: ~s"
          (trm-pc prog)
          (trm-reg* prog))]
